@@ -21,10 +21,7 @@ Index a document:
 ```python
 doc = {'name': 'William Adama', 'title': 'Admiral', 'nickname': 'Husker',
        'colony': 'Caprica', 'is_cylon': False}
-et.index('contacts',
-         'person',
-         doc,
-         id=1)
+et.index(index='contacts', doc_type='person', doc, id=1)
 ```
 
 Index multiple documents using the bulk-indexing API:
