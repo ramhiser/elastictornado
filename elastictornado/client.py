@@ -1,14 +1,104 @@
-class ElasticTornado(object):
-    def __init__(self):
-        pass
+from pyelasticsearch.client import JsonEncoder
+from six.moves.urllib.parse import urlparse
+import certifi
+from tornado.httpclient import AsyncHTTPClient, HTTPRequest
+from tornado import gen
 
-    def send_request(self):
-        pass
+from elastictornado import utils
+
+
+class ElasticTornado(object):
+    def __init__(self,
+                 url='http://localhost',
+                 timeout=60,
+                 max_retries=0,
+                 port=9200,
+                 username=None,
+                 password=None,
+                 # TODO: Not using certs yet. Use them?
+                 ca_certs=certifi.where(),
+                 client_cert=None):
+        """
+        :arg url: A URL of ES nodes, which can be a full URLs with port number,
+            like ``http://elasticsearch.example.com:9200``, or you can pass the
+            port separately using the ``port`` kwarg. To do HTTP basic
+            authentication, you can use RFC-2617-style URLs like
+            ``http://someuser:somepassword@example.com:9200`` or the separate
+            ``username`` and ``password`` kwargs below.  Unlike
+            ``pyelasticsearch``, we allow only one URL. This will likely change
+            in a future version.
+        :arg timeout: Number of seconds to wait for each request before raising
+            Timeout
+        :arg max_retries: How many other servers to try, in series, after a
+            request times out or a connection fails
+        :arg username: Authentication username to send via HTTP basic auth
+        :arg password: Password to use in HTTP basic auth. If a username and
+            password are embedded in a URL, those are favored.
+        :arg port: The default port to connect on, for URLs that don't include
+            an explicit port
+        :arg ca_certs: A path to a bundle of CA certificates to trust. The
+            default is to use Mozilla's bundle, the same one used by Firefox.
+        :arg client_cert: A certificate to authenticate the client to the
+            server
+        """
+        url = url.rstrip('/')
+        parsed_url = urlparse(url)
+
+        self.host = parsed_url.hostname
+        self.port = parsed_url.port or port
+        self.username = username or parsed_url.username
+        self.password = password or parsed_url.password
+        self.use_ssl = parsed_url.scheme == 'https'
+        self.verify_certs = True
+        self.ca_certs = ca_certs
+        self.cert_file = client_cert
+        self.max_retries = max_retries
+        self.retry_on_timeout = True
+        self.timeout = timeout
+
+        self.http_client = AsyncHTTPClient()
+
+    @gen.coroutine
+    def send_request(self, method, path_components, body='',
+                     query_params=None):
+        if query_params is None:
+            query_params = {}
+
+        path = utils.join_path(path_components)
+
+        request_url = 'https://' if self.use_ssl else 'http://'
+        request_url += self.host
+        if self.port:
+            request_url += ':' + self.port
+        request_url = utils.join_path([request_url, path])
+
+        # TODO: There are a few member variables from pyelasticsearch not used.
+        http_request = HTTPRequest(url=request_url,
+                                   method=method,
+                                   body=body,  # TODO: Update with query_params
+                                   auth_username=self.username,
+                                   auth_password=self.password,
+                                   request_timeout=self.timeout,
+                                   validate_cert=self.verify_certs,
+                                   ca_certs=self.ca_certs)
+
+        response = yield self.http_client.fetch(http_request)
+        raise gen.Return(response)
 
     # REST API
 
-    def index(self):
-        pass
+    # TODO: Handle es_kwargs in the same way as pyelasticsearch?
+    # @es_kwargs('routing', 'parent', 'timestamp', 'ttl', 'percolate',
+    #           'consistency', 'replication', 'refresh', 'timeout', 'fields')
+    def index(self, index, doc_type, doc, id=None, overwrite_existing=True,
+              query_params=None):
+        if not overwrite_existing:
+            query_params['op_type'] = 'create'
+
+        return self.send_request('POST' if id is None else 'PUT',
+                                 [index, doc_type, id],
+                                 doc,
+                                 query_params)
 
     def bulk(self):
         pass
