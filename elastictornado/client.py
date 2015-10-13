@@ -124,8 +124,22 @@ class ElasticTornado(object):
     def delete_by_query(self):
         pass
 
-    def get(self):
-        pass
+    @es_kwargs('realtime', 'fields', 'routing', 'preference', 'refresh')
+    def get(self, index, doc_type, id, query_params=None):
+        """
+        Get a typed JSON document from an index by ID.
+
+        :arg index: The name of the index from which to retrieve
+        :arg doc_type: The type of document to get
+        :arg id: The ID of the document to retrieve
+
+        See `ES's get API`_ for more detail.
+
+        .. _`ES's get API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/docs-get.html
+        """
+        return self.send_request('GET', [index, doc_type, id],
+                                 query_params=query_params)
 
     def multi_get(self):
         pass
