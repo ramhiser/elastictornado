@@ -1,10 +1,11 @@
-from pyelasticsearch.client import JsonEncoder
 from six.moves.urllib.parse import urlparse
 import certifi
+
+from pyelasticsearch.client import JsonEncoder
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 from tornado import gen
 
-from elastictornado import utils
+from elastictornado.utils import join_path, es_kwargs
 
 
 class ElasticTornado(object):
@@ -15,7 +16,6 @@ class ElasticTornado(object):
                  port=9200,
                  username=None,
                  password=None,
-                 # TODO: Not using certs yet. Use them?
                  ca_certs=certifi.where(),
                  client_cert=None):
         """
@@ -64,13 +64,13 @@ class ElasticTornado(object):
         if query_params is None:
             query_params = {}
 
-        path = utils.join_path(path_components)
+        path = join_path(path_components)
 
         request_url = 'https://' if self.use_ssl else 'http://'
         request_url += self.host
         if self.port:
             request_url += ':' + self.port
-        request_url = utils.join_path([request_url, path])
+        request_url = join_path([request_url, path])
 
         # TODO: There are a few member variables from pyelasticsearch not used.
         http_request = HTTPRequest(url=request_url,
@@ -87,9 +87,8 @@ class ElasticTornado(object):
 
     # REST API
 
-    # TODO: Handle es_kwargs in the same way as pyelasticsearch?
-    # @es_kwargs('routing', 'parent', 'timestamp', 'ttl', 'percolate',
-    #           'consistency', 'replication', 'refresh', 'timeout', 'fields')
+    @es_kwargs('routing', 'parent', 'timestamp', 'ttl', 'percolate',
+               'consistency', 'replication', 'refresh', 'timeout', 'fields')
     def index(self, index, doc_type, doc, id=None, overwrite_existing=True,
               query_params=None):
         if not overwrite_existing:
