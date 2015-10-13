@@ -115,11 +115,46 @@ class ElasticTornado(object):
     def bulk_index(self):
         pass
 
-    def delete(self):
-        pass
+    @es_kwargs('routing', 'parent', 'replication', 'consistency', 'refresh')
+    def delete(self, index, doc_type, id, query_params=None):
+        """
+        Delete a typed JSON document from a specific index based on its ID.
 
-    def delete_all(self):
-        pass
+        :arg index: The name of the index from which to delete
+        :arg doc_type: The type of the document to delete
+        :arg id: The (string or int) ID of the document to delete
+
+        See `ES's delete API`_ for more detail.
+
+        .. _`ES's delete API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/docs-delete.html
+        """
+        # id should never be None, and it's not particular dangerous
+        # (equivalent to deleting a doc with ID "None", but it's almost
+        # certainly not what the caller meant:
+        if id is None or id == '':
+            raise ValueError('No ID specified. To delete all documents in '
+                             'an index, use delete_all().')
+        return self.send_request('DELETE', [index, doc_type, id],
+                                 query_params=query_params)
+
+    @es_kwargs('routing', 'parent', 'replication', 'consistency', 'refresh')
+    def delete_all(self, index, doc_type, query_params=None):
+        """
+        Delete all documents of the given doc type from an index.
+
+        :arg index: The name of the index from which to delete. ES does not
+            support this being empty or "_all" or a comma-delimited list of
+            index names (in 0.19.9).
+        :arg doc_type: The name of a document type
+
+        See `ES's delete API`_ for more detail.
+
+        .. _`ES's delete API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/docs-delete.html
+        """
+        return self.send_request('DELETE', [index, doc_type],
+                                 query_params=query_params)
 
     def delete_by_query(self):
         pass
