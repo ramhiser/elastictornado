@@ -1,4 +1,4 @@
-from six.moves.urllib.parse import urlparse
+from six.moves.urllib.parse import urlparse, urlencode
 import certifi
 
 from pyelasticsearch.client import JsonEncoder
@@ -64,6 +64,10 @@ class ElasticTornado(object):
         if query_params is None:
             query_params = {}
 
+        # TODO: Ignoring body provided. How to include body in addition to
+        # query_params with HTTPRequest?
+        body = urlencode(query_params)
+
         path = join_path(path_components)
 
         request_url = 'https://' if self.use_ssl else 'http://'
@@ -75,7 +79,7 @@ class ElasticTornado(object):
         # TODO: There are a few member variables from pyelasticsearch not used.
         http_request = HTTPRequest(url=request_url,
                                    method=method,
-                                   body=body,  # TODO: Update with query_params
+                                   body=body,
                                    auth_username=self.username,
                                    auth_password=self.password,
                                    request_timeout=self.timeout,
