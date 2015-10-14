@@ -1,9 +1,9 @@
 from six.moves.urllib.parse import urlparse, urlencode
 import certifi
 
-from pyelasticsearch.client import JsonEncoder
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 from tornado import gen
+from tornado.httputil import url_concat
 
 from elastictornado.utils import join_path, es_kwargs, concat
 
@@ -64,10 +64,6 @@ class ElasticTornado(object):
         if query_params is None:
             query_params = {}
 
-        # TODO: Ignoring body provided. How to include body in addition to
-        # query_params with HTTPRequest?
-        body = urlencode(query_params)
-
         path = join_path(path_components)
 
         request_url = 'https://' if self.use_ssl else 'http://'
@@ -75,6 +71,12 @@ class ElasticTornado(object):
         if self.port:
             request_url += ':' + self.port
         request_url = join_path([request_url, path])
+
+        # As far as I can tell, pyelasticsearch uses both the `requests`
+        # package as well as the `urllib`. Query parameters are appended to the
+        # URL as params. The body is either a string or a dictionary.
+        request_url = url_concat(request_url, query_params)
+        body = urlencode(body)
 
         # TODO: There are a few member variables from pyelasticsearch not used.
         http_request = HTTPRequest(url=request_url,
