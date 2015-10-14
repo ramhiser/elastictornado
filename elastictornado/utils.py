@@ -1,5 +1,5 @@
 from six.moves.urllib.parse import quote_plus as qp
-from six import binary_type, text_type, iterkeys
+from six import binary_type, text_type, iterkeys, string_types
 from functools import wraps
 
 
@@ -66,3 +66,15 @@ def es_kwargs(*args_to_convert):
                         return func(*args, query_params=query_params, **kwargs)
                 return decorate
             return decorator
+
+
+def concat(items):
+    """
+    Return a comma-delimited concatenation of the elements of ``items``.
+    If ``items`` is a string, promote it to a 1-item list.
+    """
+    if items is None:
+        return ''
+    if isinstance(items, string_types):
+        items = [items]
+        return ','.join(items)

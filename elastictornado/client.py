@@ -5,7 +5,7 @@ from pyelasticsearch.client import JsonEncoder
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 from tornado import gen
 
-from elastictornado.utils import join_path, es_kwargs
+from elastictornado.utils import join_path, es_kwargs, concat
 
 
 class ElasticTornado(object):
@@ -199,35 +199,117 @@ class ElasticTornado(object):
 
     # Index Admin API
 
-    def status(self):
-        pass
+    @es_kwargs('recovery', 'snapshot')
+    def status(self, index=None, query_params=None):
+        """
+        Retrieve the status of one or more indices
+
+        :arg index: An index or iterable thereof
+
+        See `ES's index-status API`_ for more detail.
+
+        .. _`ES's index-status API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-status.html
+        """
+        return self.send_request('GET', [concat(index), '_status'],
+                                 query_params=query_params)
 
     def update_aliases(self):
         pass
 
-    def get_aliases(self):
-        pass
+    @es_kwargs('ignore_unavailable')
+    def get_aliases(self, index=None, alias='*', query_params=None):
+        """
+        Retrieve a listing of aliases
 
-    def aliases(self):
-        pass
+        :arg index: The name of an index or an iterable of indices from which
+            to fetch aliases. If omitted, look in all indices.
+        :arg alias: The name of the alias to return or an iterable of them.
+            Wildcard * is supported. If this arg is omitted, return all
+            aliases.
+
+        See `ES's indices-aliases API`_.
+
+        .. _`ES's indices-aliases API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-aliases.html
+        """
+        return self.send_request('GET',
+                                 [concat(index), '_aliases', concat(alias)],
+                                 query_params=query_params)
 
     def create_index(self):
         pass
 
-    def delete_index(self):
-        pass
+    @es_kwargs()
+    def delete_index(self, index, query_params=None):
+        """
+        Delete an index.
 
-    def delete_all_indexes(self):
-        pass
+        :arg index: An index or iterable thereof to delete
 
-    def close_index(self):
-        pass
+        If the index is not found, raise
+        :class:`~pyelasticsearch.exceptions.ElasticHttpNotFoundError`.
 
-    def open_index(self):
-        pass
+        See `ES's delete-index API`_ for more detail.
 
-    def get_settings(self):
-        pass
+        .. _`ES's delete-index API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-index.html
+        """
+        if not index:
+            raise ValueError('No indexes specified. To delete all indexes, use'
+                             ' delete_all_indexes().')
+        return self.send_request('DELETE', [concat(index)],
+                                 query_params=query_params)
+
+    def delete_all_indexes(self, **kwargs):
+        """Delete all indexes."""
+        return self.delete_index('_all', **kwargs)
+
+    @es_kwargs()
+    def close_index(self, index, query_params=None):
+        """
+        Close an index.
+
+        :arg index: The index to close
+
+        See `ES's close-index API`_ for more detail.
+
+        .. _`ES's close-index API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-open-close.html
+        """
+        return self.send_request('POST', [index, '_close'],
+                                 query_params=query_params)
+
+    @es_kwargs()
+    def open_index(self, index, query_params=None):
+        """
+        Open an index.
+
+        :arg index: The index to open
+
+        See `ES's open-index API`_ for more detail.
+
+        .. _`ES's open-index API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-open-close.html
+        """
+        return self.send_request('POST', [index, '_open'],
+                                 query_params=query_params)
+
+    @es_kwargs()
+    def get_settings(self, index, query_params=None):
+        """
+        Get the settings of one or more indexes.
+
+        :arg index: An index or iterable of indexes
+
+        See `ES's get-settings API`_ for more detail.
+
+        .. _`ES's get-settings API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-get-settings.html
+        """
+        return self.send_request('GET',
+                                 [concat(index), '_settings'],
+                                 query_params=query_params)
 
     def update_settings(self):
         pass
@@ -235,23 +317,109 @@ class ElasticTornado(object):
     def update_all_settings(self):
         pass
 
-    def flush(self):
-        pass
+    @es_kwargs('refresh')
+    def flush(self, index=None, query_params=None):
+        """
+        Flush one or more indices (clear memory).
 
-    def refresh(self):
-        pass
+        :arg index: An index or iterable of indexes
 
-    def gateway_snapshot(self):
-        pass
+        See `ES's flush API`_ for more detail.
 
-    def optimize(self):
-        pass
+        .. _`ES's flush API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-flush.html
+        """
+        return self.send_request('POST',
+                                 [concat(index), '_flush'],
+                                 query_params=query_params)
 
-    def health(self):
-        pass
+    @es_kwargs()
+    def refresh(self, index=None, query_params=None):
+        """
+        Refresh one or more indices.
 
-    def cluster_state(self):
-        pass
+        :arg index: An index or iterable of indexes
+
+        See `ES's refresh API`_ for more detail.
+
+        .. _`ES's refresh API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-refresh.html
+        """
+        return self.send_request('POST', [concat(index), '_refresh'],
+                                 query_params=query_params)
+
+    @es_kwargs()
+    def gateway_snapshot(self, index=None, query_params=None):
+        """
+        Gateway snapshot one or more indices.
+
+        :arg index: An index or iterable of indexes
+
+        See `ES's gateway-snapshot API`_ for more detail.
+
+        .. _`ES's gateway-snapshot API`:
+            http://www.elasticsearch.org/guide/reference/api/admin-indices-gateway-snapshot.html
+        """
+        return self.send_request(
+            'POST',
+            [concat(index), '_gateway', 'snapshot'],
+            query_params=query_params)
+
+    @es_kwargs('max_num_segments', 'only_expunge_deletes', 'refresh', 'flush',
+               'wait_for_merge')
+    def optimize(self, index=None, query_params=None):
+        """
+        Optimize one or more indices.
+
+        :arg index: An index or iterable of indexes
+
+        See `ES's optimize API`_ for more detail.
+
+        .. _`ES's optimize API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-optimize.html
+        """
+        return self.send_request('POST',
+                                 [concat(index), '_optimize'],
+                                 query_params=query_params)
+
+    @es_kwargs('level', 'wait_for_status', 'wait_for_relocating_shards',
+               'wait_for_nodes', 'timeout')
+    def health(self, index=None, query_params=None):
+        """
+        Report on the health of the cluster or certain indices.
+
+        :arg index: The index or iterable of indexes to examine
+
+        See `ES's cluster-health API`_ for more detail.
+
+        .. _`ES's cluster-health API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-health.html
+        """
+        return self.send_request(
+            'GET',
+            ['_cluster', 'health', concat(index)],
+            query_params=query_params)
+
+    @es_kwargs('local')
+    def cluster_state(self, metric='_all', index='_all', query_params=None):
+        """
+        Return state information about the cluster.
+
+        :arg metric: Which metric to return: one of "version", "master_node",
+            "nodes", "routing_table", "meatadata", or "blocks", an iterable
+            of them, or a comma-delimited string of them. Defaults to all
+            metrics.
+        :arg index: An index or iterable of indexes to return info about
+
+        See `ES's cluster-state API`_ for more detail.
+
+        .. _`ES's cluster-state API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-state.html
+        """
+        return self.send_request(
+            'GET',
+            ['_cluster', 'state', concat(metric), concat(index)],
+            query_params=query_params)
 
     def percolate(self):
         pass
