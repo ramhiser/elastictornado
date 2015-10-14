@@ -216,8 +216,21 @@ class ElasticTornado(object):
         return self.send_request('GET', [concat(index), '_status'],
                                  query_params=query_params)
 
-    def update_aliases(self):
-        pass
+    @es_kwargs()
+    def update_aliases(self, actions, query_params=None):
+        """
+        Atomically add, remove, or update aliases in bulk.
+
+        :arg actions: A list of the actions to perform
+
+        See `ES's indices-aliases API`_.
+
+        .. _`ES's indices-aliases API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-aliases.html
+        """
+        return self.send_request('POST', ['_aliases'],
+                                 body={'actions': actions},
+                                 query_params=query_params)
 
     @es_kwargs('ignore_unavailable')
     def get_aliases(self, index=None, alias='*', query_params=None):
@@ -239,8 +252,24 @@ class ElasticTornado(object):
                                  [concat(index), '_aliases', concat(alias)],
                                  query_params=query_params)
 
-    def create_index(self):
-        pass
+    @es_kwargs()
+    def create_index(self, index, settings=None, query_params=None):
+        """
+        Create an index with optional settings.
+
+        :arg index: The name of the index to create
+        :arg settings: A dictionary of settings
+
+        If the index already exists, raise
+        :class:`~pyelasticsearch.exceptions.IndexAlreadyExistsError`.
+
+        See `ES's create-index API`_ for more detail.
+
+        .. _`ES's create-index API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-create-index.html
+        """
+        return self.send_request('PUT', [index], body=settings or {},
+                                 query_params=query_params)
 
     @es_kwargs()
     def delete_index(self, index, query_params=None):
@@ -313,11 +342,43 @@ class ElasticTornado(object):
                                  [concat(index), '_settings'],
                                  query_params=query_params)
 
-    def update_settings(self):
-        pass
+    @es_kwargs()
+    def update_settings(self, index, settings, query_params=None):
+        """
+        Change the settings of one or more indexes.
 
-    def update_all_settings(self):
-        pass
+        :arg index: An index or iterable of indexes
+        :arg settings: A dictionary of settings
+
+        See `ES's update-settings API`_ for more detail.
+
+        .. _`ES's update-settings API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-update-settings.html
+        """
+        if not index:
+            raise ValueError('No indexes specified. To update all indexes, use'
+                             ' update_all_settings().')
+        # If we implement the "update cluster settings" API, call that
+        # update_cluster_settings().
+        return self.send_request('PUT',
+                                 [concat(index), '_settings'],
+                                 body=settings,
+                                 query_params=query_params)
+
+    @es_kwargs()
+    def update_all_settings(self, settings, query_params=None):
+        """
+        Update the settings of all indexes.
+
+        :arg settings: A dictionary of settings
+
+        See `ES's update-settings API`_ for more detail.
+
+        .. _`ES's update-settings API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-update-settings.html
+        """
+        return self.send_request('PUT', ['_settings'], body=settings,
+                                 query_params=query_params)
 
     @es_kwargs('refresh')
     def flush(self, index=None, query_params=None):
@@ -423,5 +484,26 @@ class ElasticTornado(object):
             ['_cluster', 'state', concat(metric), concat(index)],
             query_params=query_params)
 
-    def percolate(self):
-        pass
+    @es_kwargs('routing', 'preference', 'ignore_unavailable',
+               'percolate_format')
+    def percolate(self, index, doc_type, doc, query_params=None):
+        """
+        Run a JSON document through the registered percolator queries, and
+        return which ones match.
+
+        :arg index: The name of the index to which the document pretends to
+            belong
+        :arg doc_type: The type the document should be treated as if it has
+        :arg doc: A Python mapping object, convertible to JSON, representing
+            the document
+
+        Use :meth:`index()` to register percolators. See `ES's percolate API`_
+        for more detail.
+
+        .. _`ES's percolate API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/search-percolate.html#_percolate_api
+        """
+        return self.send_request('GET',
+                                 [index, doc_type, '_percolate'],
+                                 doc,
+                                 query_params=query_params)
