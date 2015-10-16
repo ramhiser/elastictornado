@@ -1,3 +1,4 @@
+from operator import itemgetter
 from six.moves.urllib.parse import urlparse, urlencode
 import certifi
 
@@ -178,11 +179,93 @@ class ElasticTornado(object):
         return self.send_request('GET', [index, doc_type, id],
                                  query_params=query_params)
 
-    def multi_get(self):
-        pass
+    @es_kwargs()
+    def multi_get(self, ids, index=None, doc_type=None, fields=None,
+                  query_params=None):
+        """
+        Get multiple typed JSON documents from ES.
 
-    def update(self):
-        pass
+        :arg ids: An iterable, each element of which can be either an a dict or
+            an id (int or string). IDs are taken to be document IDs. Dicts are
+            passed through the Multi Get API essentially verbatim, except that
+            any missing ``_type``, ``_index``, or ``fields`` keys are filled in
+            from the defaults given in the ``doc_type``, ``index``, and
+            ``fields`` args.
+        :arg index: Default index name from which to retrieve
+        :arg doc_type: Default type of document to get
+        :arg fields: Default fields to return
+
+        See `ES's Multi Get API`_ for more detail.
+
+        .. _`ES's Multi Get API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/docs-multi-get.html
+        """
+        doc_template = dict(
+            filter(
+                itemgetter(1),
+                [('_index', index), ('_type', doc_type), ('fields', fields)]))
+
+        docs = []
+        for id in ids:
+            doc = doc_template.copy()
+            if isinstance(id, dict):
+                doc.update(id)
+            else:
+                doc['_id'] = id
+                docs.append(doc)
+
+                return self.send_request(
+                    'GET', ['_mget'], body={'docs': docs},
+                    query_params=query_params)
+
+    @es_kwargs('routing', 'parent', 'timeout', 'replication', 'consistency',
+               'percolate', 'refresh', 'retry_on_conflict', 'fields')
+    def update(self, index, doc_type, id, script=None, params=None, lang=None,
+               query_params=None, doc=None, upsert=None, doc_as_upsert=None):
+        """
+        Update an existing document. Raise ``TypeError`` if ``script``, ``doc``
+        and ``upsert`` are all unspecified.
+
+        :arg index: The name of the index containing the document
+        :arg doc_type: The type of the document
+        :arg id: The ID of the document
+        :arg script: The script to be used to update the document
+        :arg params: A dict of the params to be put in scope of the script
+        :arg lang: The language of the script. Omit to use the default,
+            specified by ``script.default_lang``.
+        :arg doc: A partial document to be merged into the existing document
+        :arg upsert: The content for the new document created if the document
+            does not exist
+        :arg doc_as_upsert: The provided document will be inserted if the
+            document does not already exist
+
+        See `ES's Update API`_ for more detail.
+
+        .. _`ES's Update API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/docs-update.html
+        """
+        if script is None and doc is None and upsert is None:
+            raise TypeError('At least one of the script, doc, or upsert '
+                            'kwargs must be provided.')
+
+        body = {}
+        if script:
+            body['script'] = script
+        if lang and script:
+            body['lang'] = lang
+        if doc:
+            body['doc'] = doc
+        if upsert:
+            body['upsert'] = upsert
+        if params:
+            body['params'] = params
+        if doc_as_upsert:
+            body['doc_as_upsert'] = doc_as_upsert
+            return self.send_request(
+                'POST',
+                [index, doc_type, id, '_update'],
+                body=body,
+                query_params=query_params)
 
     def search(self):
         pass
@@ -190,14 +273,78 @@ class ElasticTornado(object):
     def count(self):
         pass
 
-    def get_mapping(self):
-        pass
+    @es_kwargs()
+    def get_mapping(self, index=None, doc_type=None, query_params=None):
+        """
+        Fetch the mapping definition for a specific index and type.
 
-    def put_mapping(self):
-        pass
+        :arg index: An index or iterable thereof
+        :arg doc_type: A document type or iterable thereof
 
-    def more_like_this(self):
-        pass
+        Omit both arguments to get mappings for all types and indexes.
+
+        See `ES's get-mapping API`_ for more detail.
+
+        .. _`ES's get-mapping API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-get-mapping.html
+        """
+        return self.send_request(
+            'GET',
+            [concat(index), concat(doc_type), '_mapping'],
+            query_params=query_params)
+
+    @es_kwargs('ignore_conflicts')
+    def put_mapping(self, index, doc_type, mapping, query_params=None):
+        """
+        Register specific mapping definition for a specific type against one or
+        more indices.
+
+        :arg index: An index or iterable thereof
+        :arg doc_type: The document type to set the mapping of
+        :arg mapping: A dict representing the mapping to install. For example,
+            this dict can have top-level keys that are the names of doc types.
+
+        See `ES's put-mapping API`_ for more detail.
+
+        .. _`ES's put-mapping API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/indices-put-mapping.html
+        """
+        return self.send_request(
+            'PUT',
+            [concat(index), doc_type, '_mapping'],
+            mapping,
+            query_params=query_params)
+
+    @es_kwargs('search_type', 'search_indices', 'search_types',
+               'search_scroll', 'search_size', 'search_from',
+               'like_text', 'percent_terms_to_match', 'min_term_freq',
+               'max_query_terms', 'stop_words', 'min_doc_freq', 'max_doc_freq',
+               'min_word_len', 'max_word_len', 'boost_terms', 'boost',
+               'analyzer')
+    def more_like_this(self, index, doc_type, id, mlt_fields, body='',
+                       query_params=None):
+        """
+        Execute a "more like this" search query against one or more fields and
+        get back search hits.
+
+        :arg index: The index to search and where the document for comparison
+            lives
+        :arg doc_type: The type of document to find others like
+        :arg id: The ID of the document to find others like
+        :arg mlt_fields: The list of fields to compare on
+        :arg body: A dictionary that will convert to ES's query DSL and be
+            passed as the request body
+
+        See `ES's more-like-this API`_ for more detail.
+
+        .. _`ES's more-like-this API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/search-more-like-this.html
+        """
+        query_params['mlt_fields'] = self._concat(mlt_fields)
+        return self.send_request('GET',
+                                 [index, doc_type, id, '_mlt'],
+                                 body=body,
+                                 query_params=query_params)
 
     # Index Admin API
 
