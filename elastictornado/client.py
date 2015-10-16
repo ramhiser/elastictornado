@@ -1,4 +1,5 @@
 from operator import itemgetter
+from six import string_types
 from six.moves.urllib.parse import urlparse, urlencode
 import certifi
 
@@ -115,9 +116,6 @@ class ElasticTornado(object):
     def update_op(self):
         pass
 
-    def bulk_index(self):
-        pass
-
     @es_kwargs('routing', 'parent', 'replication', 'consistency', 'refresh')
     def delete(self, index, doc_type, id, query_params=None):
         """
@@ -159,8 +157,33 @@ class ElasticTornado(object):
         return self.send_request('DELETE', [index, doc_type],
                                  query_params=query_params)
 
-    def delete_by_query(self):
-        pass
+    @es_kwargs('q', 'df', 'analyzer', 'default_operator', 'source' 'routing',
+               'replication', 'consistency')
+    def delete_by_query(self, index, doc_type, query, query_params=None):
+        """
+        Delete typed JSON documents from a specific index based on query.
+
+        :arg index: An index or iterable thereof from which to delete
+        :arg doc_type: The type of document or iterable thereof to delete
+        :arg query: A dictionary that will convert to ES's query DSL or a
+            string that will serve as a textual query to be passed as the ``q``
+            query string parameter. (Passing the ``q`` kwarg yourself is
+            deprecated.)
+
+        See `ES's delete-by-query API`_ for more detail.
+
+        .. _`ES's delete-by-query API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/docs-delete-by-query.html
+        """
+        if isinstance(query, string_types) and 'q' not in query_params:
+            query_params['q'] = query
+            body = ''
+        else:
+            body = {'query': query}
+        return self.send_request('DELETE',
+                                 [concat(index), concat(doc_type), '_query'],
+                                 body,
+                                 query_params=query_params)
 
     @es_kwargs('realtime', 'fields', 'routing', 'preference', 'refresh')
     def get(self, index, doc_type, id, query_params=None):
@@ -267,11 +290,61 @@ class ElasticTornado(object):
                 body=body,
                 query_params=query_params)
 
-    def search(self):
-        pass
+    def _search_or_count(self, kind, query, index=None, doc_type=None,
+                         query_params=None):
+        if isinstance(query, string_types):
+            query_params['q'] = query
+            body = ''
+        else:
+            body = query
 
-    def count(self):
-        pass
+        return self.send_request('GET',
+                                 [concat(index), concat(doc_type), kind],
+                                 body,
+                                 query_params=query_params)
+
+    @es_kwargs('routing', 'size')
+    def search(self, query, **kwargs):
+        """
+        Execute a search query against one or more indices and get back search
+        hits.
+
+        :arg query: A dictionary that will convert to ES's query DSL or a
+            string that will serve as a textual query to be passed as the ``q``
+            query string parameter
+        :arg index: An index or iterable of indexes to search. Omit to search
+            all.
+        :arg doc_type: A document type or iterable thereof to search. Omit to
+            search all.
+        :arg size: Limit the number of results to ``size``. Use with
+            ``es_from`` to implement paginated searching.
+
+        See `ES's search API`_ for more detail.
+
+        .. _`ES's search API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/_the_search_api.html
+        """
+        return self._search_or_count('_search', query, **kwargs)
+
+    @es_kwargs('df', 'analyzer', 'default_operator', 'source', 'routing')
+    def count(self, query, **kwargs):
+        """
+        Execute a query against one or more indices and get hit count.
+
+        :arg query: A dictionary that will convert to ES's query DSL or a
+            string that will serve as a textual query to be passed as the ``q``
+            query string parameter
+        :arg index: An index or iterable of indexes to search. Omit to search
+            all.
+        :arg doc_type: A document type or iterable thereof to search. Omit to
+            search all.
+
+        See `ES's count API`_ for more detail.
+
+        .. _`ES's count API`:
+            http://www.elastic.co/guide/en/elasticsearch/reference/current/search-count.html
+        """
+        return self._search_or_count('_count', query, **kwargs)
 
     @es_kwargs()
     def get_mapping(self, index=None, doc_type=None, query_params=None):
