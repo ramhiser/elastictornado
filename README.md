@@ -1,8 +1,11 @@
 # elastictornado
 
 This Python package provides an asynchronous ElasticSearch client via the
-[Tornado framework](http://www.tornadoweb.org/). Our implementation closely follows that
-of  [pyelasticsearch](https://github.com/pyelasticsearch/pyelasticsearch).
+[Tornado framework](http://www.tornadoweb.org/). Our implementation closely
+follows that of [pyelasticsearch](https://github.com/pyelasticsearch/pyelasticsearch).
+As a result, the `elastictornado` package differs from `tornado-es` and other
+Tornado-based ES client packages because we provide a fully-featured client API
+along with thorough documentation, which is lacking in other packages.
 
 Asynchronous request support has been added for methods which require the use of
 asynchronous libraries (like Tornado's `AsyncHTTPClient` library.)
